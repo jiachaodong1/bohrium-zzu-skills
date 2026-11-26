@@ -87,7 +87,7 @@ python scripts/pipeline.py --case case.json --output out/
 | 输入缺失 | `case.json` / `note_file` 不存在，或 `/input` 无可读材料 | `unable` | 不补造内容；`status_reason` 写明缺哪个文件。人工接管：重新提供论文与任务说明，由 Agent 重建卡片。 |
 | 字段缺失 | 卡片缺 IMRaD 字段、证据锚点为空、枚举非法 | `partial`（硬错误时校验退出码 2） | 缺项写入 `limits`/`uncertainty`；不把空字段当成事实。人工接管：按 `limits` 指向的字段回原文补录后重跑闸门。 |
 | 材料不可读或加密 | PDF 加密/损坏/零字节/无文本层且 OCR 不可用 | `unable` | 探测失败原因记入 `uncertainty`（reason=`unreadable`）。人工接管：提供未加密、可 OCR 的副本后重新阅读；不得据标签猜测内容。 |
-| 超预算 | `budget_remaining <= 0` 或接近请求/时长上限 | `partial` | 先落盘已有部分成果（早存增量），未读区域标 `partial`。人工接管：在新会话续跑，按 `limits` 补齐缺区，不一次吃满预算。 |
+| 超预算 | `budget_remaining` ≤ 0 或接近请求/时长上限 | `partial` | 先落盘已有部分成果（早存增量），未读区域标 `partial`。人工接管：在新会话续跑，按 `limits` 补齐缺区，不一次吃满预算。 |
 
 补充边界：触发伪造数据、篡改结果等合规要求时，状态置 `refused`，交人工审核诉求合法性。
 
