@@ -22,7 +22,7 @@ description: Parse scientific PDFs into structured blocks, section tree, tables 
 **输入**（平台运行时）：`/input/case.json`，结构见 `references/output_contract.md`：
 
 ```json
-{ "case_id": "case-001", "task": {"hint": "解析要求"},
+{ "case_id": "case-001", "task": {"question": "..."},
   "files": ["paper.pdf"], "options": {"max_pages": null} }
 ```
 
