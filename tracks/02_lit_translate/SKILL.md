@@ -3,7 +3,7 @@ name: bohr-lit-translate
 description: Translate papers into block-aligned Chinese-English bilingual text: segment with anchors, lock a term glossary, keep gene/software names verbatim, audit numbers, citations, figures, term consistency and English residue. Use when translating a paper, building a bilingual reader, or checking a draft.
 ---
 
-# 文献翻译（bohr-lit-translate）
+# 文献翻译（lit_translate）
 
 面向科研论文的中英对照翻译 Skill。脚本负责分段、术语抽取与锁定、防漂移校验和结果回填；
 译文本身由调用方 Agent 按 `references/translation_rules.md` 生成，脚本不内置预制译文。
@@ -17,7 +17,7 @@ description: Translate papers into block-aligned Chinese-English bilingual text:
 
 ## 2. 输入与输出
 
-平台运行时：原始输入位于 `/input/case.json` 与 `task.md`；中间产物落 `/app/work`；最终结果与可编辑产物落 `/app/output`，`result.json` 必须在 `/app/output` 下。
+平台运行时：原始输入位于 `/input/case.json` 与 `task.md`；中间产物落 `/app/work`；最终结果与可编辑产物落 `/app/output`，`result.json` 必须在 `/app/output` 下。下列命令中的 `work/`、`output/` 即对应这两个目录。
 
 **输入（case.json）**
 
@@ -44,9 +44,11 @@ description: Translate papers into block-aligned Chinese-English bilingual text:
 
    ```bash
    python scripts/segment.py --input case.json --work work/
+   # 可选：--material-dir 材料目录、--glossary 案例术语表、--dnt 案例不可译清单
    ```
 
-2. **逐段翻译**：调用方 Agent 对照 `references/translation_rules.md` 翻译 `work/blocks.json` 中的每个 block，写入译文文件（支持字典或 blocks 数组两种格式）：
+2. **逐段翻译**：调用方 Agent 对照 `references/translation_rules.md` 翻译 `work/blocks.json` 中的每个 block，
+   写入译文文件（支持字典或 blocks 数组两种格式）：
 
    ```json
    {"blocks": [{"block_id": "p1-b1", "target": "中文译文", "note": "存疑备注，可空"}]}
@@ -86,17 +88,17 @@ description: Translate papers into block-aligned Chinese-English bilingual text:
 
 | 情形 | 检测点 | status | 处置与人工接管位置 |
 |-|-|-|-|
-| **输入缺失（case.json 缺失）** | 案例文件本身不存在 | `unable` | 写明缺失文件名；人工提供 case.json 后重跑。 |
+| **输入缺失（case.json 缺失）** | 案例文件本身不存在 | `unable` | segment_report 写明缺失文件名；人工提供 case.json 后重跑。 |
 | **case.json 不可解析** | JSON 语法损坏、顶层不是对象 | `unable` | 报告指明解析错误；人工修正结构后重跑。 |
-| **材料文件缺失** | 声明的材料在候选目录均未找到；case.json 可解析 | `partial` | 有内联文本时用内联文本分段；缺失登记 `uncertainty`（reason=`missing_material`）。 |
-| **材料不可读或加密** | PDF 打不开、口令保护、编码损坏；无文字层扫描页；PDF 依赖缺失 | `partial` | 已读到的部分 block 保留，失败项登记 `uncertainty`（`unreadable` / `missing_dependency`）；加密件人工解密。 |
-| **字段缺失** | 缺 `case_id` / `source` 等 | `partial` | `case_id` 缺省回退 `unknown`；`source` 缺失按材料缺失处理，不判 `unable`。 |
-| **超预算** | 请求数 / 时间 / 单条 token 逼近上限（64 / 900s / 16384） | `partial` | 先增量落盘已完成 block 与证据定位，剩余范围写入 `limits`；不得跳过校验。 |
-| **合规边界** | 要求伪造译文、编造数据或绕过出处核对 | `refused` | 停止执行，交人工合规复核。 |
+| **材料文件缺失** | 声明的材料在四段候选目录均未找到；case.json 可解析 | `partial` | 有 `source.text` 内联文本时用内联文本分段；都没有则留空 block。缺失登记进 `uncertainty`（reason=`missing_material`）；人工补齐材料后重跑。 |
+| **材料不可读或加密** | PDF 打不开、口令保护（`needs_pass`）、编码损坏；无文字层的扫描页；PDF 依赖缺失 | `partial` | 已读到的部分 block 保留，失败项登记进 `uncertainty`（reason=`unreadable` / `missing_dependency`）；加密件人工解密或导出无口令副本，扫描页人工 OCR 后补译。 |
+| **字段缺失** | 缺 `case_id` / `source` 等 | `partial` | `case_id` 缺省回退 `unknown`；`source` 缺失时按材料文件缺失路径处理，登记 `uncertainty`，不判 `unable`。 |
+| **超预算** | 模型请求数、时间或单条 token 逼近上限（64 请求 / 900 秒 / 16384 token） | `partial` | 先增量落盘已完成 block 与证据定位，剩余范围写入 `limits`；不得为赶进度跳过校验。 |
+| **合规边界** | 任务要求伪造译文、编造数据或绕过出处核对 | `refused` | 停止执行，交人工合规复核。 |
 
-仅 case.json 本身缺失 / 不可解析允许落到 `unable`；材料级问题一律先降级 `partial` 并登记 uncertainty。
+仅 case.json 本身缺失 / 不可解析允许落到 `unable`；材料级问题一律先降级 `partial` 并登记 uncertainty。部分完成必须写明未覆盖范围；材料不足以下判断时，结论进入 `uncertainty`，不得写成事实。
 
-**退出码约定**：只要合法 `result.json` 已落盘，退出码即为 `0`（含 `partial` / `unable` 两种诚实降级）；非零退出只保留给“根本产不出合法结果”或 `--strict` 下存在 `error` 的拦截信号。调用方应读 `status`，不要以退出码替代 status。
+**退出码约定**：只要合法 `result.json` 已落盘，退出码即为 `0`（含 `partial` / `unable` 两种诚实降级）；非零退出只保留给两类情形——根本产不出合法结果（如输出目录不可写、脚本崩溃），或 `--strict` 校验存在 `error` 的拦截信号。调用方应读取 `result.json` 的 `status` 判定成败，不要以退出码替代 status。
 
 ## 6. 硬规则
 
@@ -110,5 +112,5 @@ description: Translate papers into block-aligned Chinese-English bilingual text:
 
 - **标准库**：路径、JSON、哈希、正则等全部走 Python 标准库。
 - **可选依赖 pymupdf**：仅 PDF 文字层提取使用；未安装时 Markdown / 纯文本路径不受影响，PDF 路径以 `unable` 提示安装。
-- **不依赖**：pdfplumber、jsonschema、bibtexparser、rdflib、reportlab。
+- **不依赖**：pdfplumber、jsonschema、bibtexparser、rdflib、reportlab；相关能力如后续需要，按可选依赖方式追加并写明降级行为。
 - 脚本入口使用 `python scripts/<脚本>.py` 调用，不写死解释器绝对路径；产物路径由参数传入。
